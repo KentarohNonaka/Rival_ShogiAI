@@ -1,18 +1,43 @@
-#相手の平均勝率に近い手から選択確率が最も高い手を選ぶ(該当なしの場合，選択確率が最も高い手を優先)
+'''
+rival_1_player.py
+Copyright (C) 2023 Kentaroh Nonaka
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+This program uses cshogi library from <https://github.com/TadaoYamaoka/cshogi> by Tadao Yamaoka.
+The library is licensed under the GNU General Public License version 3.
+
+This program is based on the mcts_player.py part of <https://github.com/TadaoYamaoka/python-dlshogi2/tree/main/pydlshogi2/player> by Tadao Yamaoka.
+The original work is licensed under the GNU General Public License version 3.
+This program has been modified by Kentaroh Nonaka on 2023-01.
+'''
 
 import numpy as np
 import torch
 
 from cshogi import Board, BLACK, NOT_REPETITION, REPETITION_DRAW, REPETITION_WIN, REPETITION_SUPERIOR, move_to_usi
+
+#以下変更
 from features import FEATURES_NUM, make_input_features, make_move_label
 from uct_node import NodeTree
 from policy_value_resnet import PolicyValueNetwork
 from base_player import BasePlayer
+from statistics import mean
+#以上変更
 
 import time
 import math
-
-from statistics import mean
 
 # デフォルトGPU ID
 DEFAULT_GPU_ID = 0
@@ -21,7 +46,7 @@ DEFAULT_BATCH_SIZE = 32
 # デフォルト投了閾値
 DEFAULT_RESIGN_THRESHOLD = 0.01
 # デフォルトPUCTの定数 U(s,a) = C_PUCT * P(s, a) * √ΣbN(s, b) / 1 + N(s, a)
-DEFAULT_C_PUCT = 100
+DEFAULT_C_PUCT = 100    #1.0から変更
 # デフォルト温度パラメータ
 DEFAULT_TEMPERATURE = 1.0
 # デフォルト持ち時間マージン(ms)
@@ -45,7 +70,7 @@ DISCARDED = -2
 # Virtual Loss
 VIRTUAL_LOSS = 1
 
-#相手相手の勝率を格納するリスト
+#相手相手の勝率を格納するリストを追加
 player_value_list = []
 
 # 温度パラメータを適用した確率分布を取得
@@ -78,9 +103,9 @@ class EvalQueueElement:
 
 class MCTSPlayer(BasePlayer):
     # USIエンジンの名前
-    name = 'RIVAL_1'
+    name = 'RIVAL_1'        #変更
     # デフォルトチェックポイント
-    DEFAULT_MODELFILE = r"/content/GCTdenryu_0001-035.pth"
+    DEFAULT_MODELFILE = r"/content/GCTdenryu_0001-035.pth"  #変更
 
     def __init__(self):
         super().__init__()
@@ -259,6 +284,8 @@ class MCTSPlayer(BasePlayer):
 
         current_node = self.tree.current_head
 
+#以下変更
+        #詰みを無視
         '''# 詰みの場合
         if current_node.value == VALUE_WIN:
             matemove = self.root_board.mate_move(3)
@@ -270,6 +297,7 @@ class MCTSPlayer(BasePlayer):
             if matemove:
                 print('info score mate 1 pv {}'.format(move_to_usi(matemove)), flush=True)
                 return move_to_usi(matemove), None'''
+#以上変更
 
         # プレイアウト数をクリア
         self.playout_count = 0
@@ -401,7 +429,7 @@ class MCTSPlayer(BasePlayer):
                 elapsed_time = int((time.time() - self.begin_time) * 1000)
                 if elapsed_time > self.last_pv_print_time + self.pv_interval:
                     self.last_pv_print_time = elapsed_time
-                    self.print_pv()
+                    self.print_pv()     #メソッドの変更
 
     # UCT探索
     def uct_search(self, board, current_node, trajectories):
@@ -496,6 +524,8 @@ class MCTSPlayer(BasePlayer):
 
         return np.argmax(ucb)
 
+#以下変更
+    #pvの表示のみ行うメソッド
     def print_pv(self):
         finish_time = time.time() - self.begin_time
 
@@ -540,7 +570,8 @@ class MCTSPlayer(BasePlayer):
             current_node.move_count,
             cp, pv), flush=True)
 
-    # 最善手取得とinfoの表示
+    # 手加減手法の実装
+    # 相手の平均勝率に近い手から選択確率が最も高い手を選ぶ(該当なしの場合，選択確率が最も高い手を優先)
     def get_bestmove_and_print_pv(self):
         # 探索にかかった時間を求める
         finish_time = time.time() - self.begin_time
@@ -600,6 +631,7 @@ class MCTSPlayer(BasePlayer):
         print(f'player_value_ave:{player_value_ave}')
         print(f'selected_win_rate:{bestvalue}')
         print(f'selected_policy:{current_node.policy[selected_index]}\n')
+#以上変更
 
         bestmove = current_node.child_move[selected_index]
 
